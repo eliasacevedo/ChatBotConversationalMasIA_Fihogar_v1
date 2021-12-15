@@ -7,6 +7,7 @@ namespace Services.FihogarService
         Task<AccessToken> AccessToken(string grantType, string token);
         Task<AccessTokenExtended> AuthorizeProvider(string provider, string username, string password, string grantType, string token);
         Task<AccountDetails> GetAccount();
+        Task<bool> AuthorizeUser(string username, string password);
     }
 
 }

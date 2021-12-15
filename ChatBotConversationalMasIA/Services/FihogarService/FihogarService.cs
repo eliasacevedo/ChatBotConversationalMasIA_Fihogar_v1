@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -12,14 +13,13 @@ namespace Services.FihogarService{
         private readonly IConfiguration configuration;
         private const string FIHOGAR_KEY_FILE_TOKEN = "FihogarToken";
         private const string FIHOGAR_KEY_FILE_PROVIDER = "FihogarProvider";
-        private const string FIHOGAR_KEY_FILE_USERNAME = "FihogarUsername";
-        private const string FIHOGAR_KEY_FILE_PASSWORD = "FihogarPassword";
         private const string FIHOGAR_ACCESS_KEY_PATH = "https://api.uat.4wrd.tech:8243/token";
         private const string FIHOGAR_AUTORIZE_PROVIDER_PATH = "https://api.uat.4wrd.tech:8243/authorize/2.0/token";
         private const string FIHOGAR_GET_ACCOUNT_PATH= "https://api.uat.4wrd.tech:8243/manage-accounts/api/2.0/accounts/";
+        private string Username { get; set; }
+        private string Password { get; set; }
         private string TokenId { get; set; }
         private string AuthorizationToken { get; set; }
-
         private const string TOKEN_ID_HEADER = "token-id";
         private const string AUTHORIZATION_HEADER = "Authorization";
 
@@ -33,8 +33,9 @@ namespace Services.FihogarService{
             var response = await doRequest.Get(path, headers);
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
-                await RefreshTokens(headers);
-                return await DoRequestGet<T>(path, headers);
+                throw new AuthenticationError();
+                // await RefreshTokens(headers, Username, Password);
+                // return await DoRequestGet<T>(path, headers);
             }
             else if (response.StatusCode != System.Net.HttpStatusCode.OK) {
                 throw new System.Exception("Hubo un error en la consulta");
@@ -48,8 +49,9 @@ namespace Services.FihogarService{
             var response = await doRequest.Post(path, headers, form);
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
-                await RefreshTokens(headers);
-                return await DoRequestPost<T>(path, headers, form);
+                throw new AuthenticationError();
+                // await RefreshTokens(headers, Username, Password);
+                // return await DoRequestPost<T>(path, headers, form);
             }
             else if (!response.IsSuccessStatusCode) {
                 throw new System.Exception("Hubo un error en la consulta");
@@ -59,13 +61,16 @@ namespace Services.FihogarService{
             return await JsonSerializer.DeserializeAsync<T>(responseStream);
         }
 
-        private async Task RefreshTokens(IDictionary<string, string> headers) {
+        private async Task RefreshTokens(IDictionary<string, string> headers, string username, string password) {
             var grantTypeToken = "client_credentials";
             var accessTokenResponse = await AccessToken(grantTypeToken, configuration[FIHOGAR_KEY_FILE_TOKEN]);
             TokenId = accessTokenResponse.Accesstoken;
             var grantTypeAuthorization = "password";
-            var authorizeTokenResponse = await AuthorizeProvider(configuration[FIHOGAR_KEY_FILE_PROVIDER], configuration[FIHOGAR_KEY_FILE_USERNAME], configuration[FIHOGAR_KEY_FILE_PASSWORD], grantTypeAuthorization, TokenId);
+            var authorizeTokenResponse = await AuthorizeProvider(configuration[FIHOGAR_KEY_FILE_PROVIDER], username, password, grantTypeAuthorization, TokenId);
+            
             AuthorizationToken = authorizeTokenResponse.Accesstoken;
+            Username = username;
+            Password = password;
             refreshTokensDictionary(headers);
         }
 
@@ -99,10 +104,10 @@ namespace Services.FihogarService{
 
             var form = new Dictionary<string, string>();
             form.Add("grant_type", grantType);
-            form.Add("username", configuration[FIHOGAR_KEY_FILE_USERNAME]);
-            form.Add("password", configuration[FIHOGAR_KEY_FILE_PASSWORD]);
-
-            return await DoRequestPost<AccessTokenExtended>(path, headers, form);
+            form.Add("username", username);
+            form.Add("password", password);
+            var response = await DoRequestPost<AccessTokenExtended>(path, headers, form);
+            return response;
         }
 
         public async Task<AccountDetails> GetAccount()
@@ -111,6 +116,17 @@ namespace Services.FihogarService{
             var headers = getAuthorizedHeaders();
 
             return await DoRequestGet<AccountDetails>(path, headers);
+        }
+
+        public async Task<bool> AuthorizeUser(string username, string password) {
+            try {
+                await RefreshTokens(getAuthorizedHeaders(), username, password);
+                return true;
+            }
+            catch(AuthenticationError err){
+                Console.WriteLine($"Usuario o contraseña incorrecto: {err.Message}");
+                return false;
+            }
         }
 
         private IDictionary<string, string> getAuthorizedHeaders() {

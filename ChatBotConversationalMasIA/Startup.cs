@@ -40,11 +40,11 @@ namespace ChatBotConversationalMasIA
             services.AddSingleton<ILuisRecognizerService, LuisRecognizerService>();
             // Create the bot as a transient. In this case the ASP Controller is expecting an IBot.
             services.AddTransient<IBot, ChatBotLUIS>();
-
+            
             // Agregando DoRequest
             services.AddSingleton<IDoRequest, DoRequest>();
             // Fihogar services
-            services.AddSingleton<IFihogarService, FihogarService>();
+            services.AddTransient<IFihogarService, FihogarService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
